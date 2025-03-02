@@ -122,21 +122,64 @@ def _sort_gradient(img, v, h, s, edges, sort_channel):
     return v, h, s
 
 def _sort_regions(v, h, s, edges, sort_channel):
-    """Sort pixels within edge-bounded regions."""
-    # Use connected components to identify regions
-    _, labels = cv2.connectedComponents(255 - edges)
+    """Sort pixels within edge-bounded regions while preserving local structure."""
+    # Preprocess edges to ensure closed regions
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+    dilated_edges = cv2.dilate(edges, kernel, iterations=1)
     
+    # Find regions using 8-connected components on inverted edges
+    _, labels = cv2.connectedComponents(255 - dilated_edges, connectivity=8)
+    
+    # Process each region
     for label in np.unique(labels):
-        if label == 0: continue  # Skip background
+        if label == 0:  # Background
+            continue
+            
+        # Create region mask and get bounding box
+        mask = (labels == label).astype(np.uint8)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Create a mask for the current region
-        mask = (labels == label).astype("uint8")
+        # Skip small regions
+        if cv2.contourArea(contours[0]) < 100:
+            continue
+
+        # Get region boundaries
+        x,y,w,h_region = cv2.boundingRect(contours[0])
         
-        # Sort pixels within the region
-        sorted_order = np.argsort(sort_channel[mask == 1])
-        v[mask == 1] = v[mask == 1][sorted_order]
-        h[mask == 1] = h[mask == 1][sorted_order]
-        s[mask == 1] = s[mask == 1][sorted_order]
+        # Process each row in the region
+        for row in range(y, y+h_region):
+            # Get row slice within region bounds
+            row_mask = mask[row, x:x+w]
+            if np.sum(row_mask) == 0:
+                continue
+                
+            # Find start/end of region segment in this row
+            cols = np.where(row_mask > 0)[0]
+            if len(cols) == 0:
+                continue
+                
+            start_col = cols[0] + x
+            end_col = cols[-1] + x + 1
+            
+            # Split into sub-segments using original edges
+            edge_positions = np.where(edges[row, start_col:end_col] > 0)[0] + start_col
+            segments = np.split(np.arange(start_col, end_col), edge_positions - start_col)
+            
+            # Sort each sub-segment
+            for seg in segments:
+                if len(seg) < 2:
+                    continue
+                    
+                # Get absolute column indices
+                start = seg[0]
+                end = seg[-1] + 1
+                
+                # Sort within the segment
+                sorted_order = np.argsort(sort_channel[row, start:end])
+                v[row, start:end] = v[row, start:end][sorted_order]
+                h[row, start:end] = h[row, start:end][sorted_order]
+                s[row, start:end] = s[row, start:end][sorted_order]
+
     return v, h, s
 
 def process_folder(input_folder, output_folder, canny_low=50, canny_high=150, sort_key='brightness', sort_method='row'):
@@ -169,4 +212,4 @@ if __name__ == "__main__":
     # Example usage
     input_folder = "input"  # Folder containing input images
     output_folder = "sorted_images"  # Folder to save sorted images
-    process_folder(input_folder, output_folder, canny_low=100, canny_high=200, sort_key='hue', sort_method='column')
+    process_folder(input_folder, output_folder, canny_low=100, canny_high=200, sort_key='hue', sort_method='region')
