@@ -41,7 +41,8 @@ def edge_guided_pixel_sort(image_path, output_path,
     result = cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
     cv2.imwrite(output_path, result)
 
-# Usage example
-edge_guided_pixel_sort('371470.jpg', 'sorted_output3.jpg', 
-                     canny_low=100, canny_high=150,
-                     sort_key='hue')
+if __name__ == "__main__":
+    # Usage example
+    edge_guided_pixel_sort('371470.jpg', 'sorted_output3.jpg', 
+                        canny_low=100, canny_high=150,
+                        sort_key='hue')
