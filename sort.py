@@ -69,4 +69,4 @@ if __name__ == "__main__":
     # Example usage
     input_folder = "input"  # Folder containing input images
     output_folder = "sorted_images"  # Folder to save sorted images
-    process_folder(input_folder, output_folder, canny_low=30, canny_high=100, sort_key='hue')
+    process_folder(input_folder, output_folder, canny_low=100, canny_high=200, sort_key='hue')
