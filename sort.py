@@ -121,64 +121,97 @@ def _sort_gradient(img, v, h, s, edges, sort_channel):
                     s[start:end, x] = s[start:end, x][sorted_order]
     return v, h, s
 
-def _sort_regions(v, h, s, edges, sort_channel):
-    """Sort pixels within edge-bounded regions while preserving local structure."""
-    # Preprocess edges to ensure closed regions
+def _sort_regions(v, h, s, edges, sort_channel, 
+                 sort_direction='vertical', 
+                 min_region_area=100):
+    """
+    Sort pixels within edge-bounded regions with configurable direction and size limits.
+    
+    Parameters:
+        sort_direction ('horizontal'|'vertical'): Sorting orientation within regions
+        min_region_area (int): Minimum pixel area for regions to be processed
+    """
+    # Enhance edge connectivity for better region detection
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
     dilated_edges = cv2.dilate(edges, kernel, iterations=1)
     
-    # Find regions using 8-connected components on inverted edges
+    # Find regions using 8-connected components
     _, labels = cv2.connectedComponents(255 - dilated_edges, connectivity=8)
     
-    # Process each region
     for label in np.unique(labels):
-        if label == 0:  # Background
+        if label == 0:  # Skip background
             continue
             
-        # Create region mask and get bounding box
+        # Create region mask and find contours
         mask = (labels == label).astype(np.uint8)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Skip small regions
-        if cv2.contourArea(contours[0]) < 100:
+        # Skip regions smaller than minimum area
+        if cv2.contourArea(contours[0]) < min_region_area:
             continue
 
-        # Get region boundaries
-        x,y,w,h_region = cv2.boundingRect(contours[0])
+        # Get region bounding box
+        x, y, w, h_region = cv2.boundingRect(contours[0])
         
-        # Process each row in the region
-        for row in range(y, y+h_region):
-            # Get row slice within region bounds
-            row_mask = mask[row, x:x+w]
-            if np.sum(row_mask) == 0:
-                continue
-                
-            # Find start/end of region segment in this row
-            cols = np.where(row_mask > 0)[0]
-            if len(cols) == 0:
-                continue
-                
-            start_col = cols[0] + x
-            end_col = cols[-1] + x + 1
-            
-            # Split into sub-segments using original edges
-            edge_positions = np.where(edges[row, start_col:end_col] > 0)[0] + start_col
-            segments = np.split(np.arange(start_col, end_col), edge_positions - start_col)
-            
-            # Sort each sub-segment
-            for seg in segments:
-                if len(seg) < 2:
+        if sort_direction == 'horizontal':
+            # Horizontal sorting: process row-wise
+            for row in range(y, y + h_region):
+                # Get horizontal segment within region bounds
+                row_mask = mask[row, x:x+w]
+                if np.sum(row_mask) == 0:
                     continue
-                    
-                # Get absolute column indices
-                start = seg[0]
-                end = seg[-1] + 1
                 
-                # Sort within the segment
-                sorted_order = np.argsort(sort_channel[row, start:end])
-                v[row, start:end] = v[row, start:end][sorted_order]
-                h[row, start:end] = h[row, start:end][sorted_order]
-                s[row, start:end] = s[row, start:end][sorted_order]
+                cols = np.where(row_mask > 0)[0] + x
+                if len(cols) == 0:
+                    continue
+                
+                start_col = cols[0]
+                end_col = cols[-1] + 1
+                
+                # Split using original edges
+                edge_positions = np.where(edges[row, start_col:end_col] > 0)[0] + start_col
+                segments = np.split(np.arange(start_col, end_col), edge_positions - start_col)
+                
+                # Sort each horizontal segment
+                for seg in segments:
+                    if len(seg) < 2:
+                        continue
+                    start = seg[0]
+                    end = seg[-1] + 1
+                    sorted_order = np.argsort(sort_channel[row, start:end])
+                    v[row, start:end] = v[row, start:end][sorted_order]
+                    h[row, start:end] = h[row, start:end][sorted_order]
+                    s[row, start:end] = s[row, start:end][sorted_order]
+                    
+        elif sort_direction == 'vertical':
+            # Vertical sorting: process column-wise
+            for col in range(x, x + w):
+                # Get vertical segment within region bounds
+                col_mask = mask[y:y+h_region, col]
+                if np.sum(col_mask) == 0:
+                    continue
+                
+                rows = np.where(col_mask > 0)[0] + y
+                if len(rows) == 0:
+                    continue
+                
+                start_row = rows[0]
+                end_row = rows[-1] + 1
+                
+                # Split using original edges
+                edge_positions = np.where(edges[start_row:end_row, col] > 0)[0] + start_row
+                segments = np.split(np.arange(start_row, end_row), edge_positions - start_row)
+                
+                # Sort each vertical segment
+                for seg in segments:
+                    if len(seg) < 2:
+                        continue
+                    start = seg[0]
+                    end = seg[-1] + 1
+                    sorted_order = np.argsort(sort_channel[start:end, col])
+                    v[start:end, col] = v[start:end, col][sorted_order]
+                    h[start:end, col] = h[start:end, col][sorted_order]
+                    s[start:end, col] = s[start:end, col][sorted_order]
 
     return v, h, s
 
