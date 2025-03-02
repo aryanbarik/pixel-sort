@@ -2,18 +2,14 @@ import cv2
 import numpy as np
 import os
 
-def edge_guided_pixel_sort(image_path, output_path, 
-                         canny_low=50, canny_high=150,
-                         sort_key='brightness'):
-    # Load image and convert to HSV
-    #img = cv2.imread(image_path)
-    img = image_path
+def edge_guided_pixel_sort(img, canny_low=50, canny_high=150, sort_key='brightness'):
+    """Perform edge-guided pixel sorting on an image."""
+    # Convert image to HSV
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv)
     
     # Edge detection (Canny)
     edges = cv2.Canny(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), canny_low, canny_high)
-    print(edges)
     
     # Choose sorting criterion
     if sort_key == 'hue':
@@ -40,9 +36,8 @@ def edge_guided_pixel_sort(image_path, output_path,
             h[y, start:end] = h[y, start:end][sorted_order]
             s[y, start:end] = s[y, start:end][sorted_order]
 
-    # Reconstruct and save
-    result = cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
-    cv2.imwrite(output_path, result)
+    # Reconstruct and return the sorted image
+    return cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
 
 def process_folder(input_folder, output_folder, canny_low=50, canny_high=150, sort_key='brightness'):
     """Process all images in a folder and save sorted images to another folder."""
@@ -70,14 +65,7 @@ def process_folder(input_folder, output_folder, canny_low=50, canny_high=150, so
         cv2.imwrite(output_path, sorted_img)
         print(f"Processed and saved: {output_path}")
 
-
-
 if __name__ == "__main__":
-    # Usage example
-    # edge_guided_pixel_sort("\images\input\371470.jpg", 'sorted_output4.jpg', 
-    #                    canny_low=100, canny_high=150,
-    #                    sort_key='hue')
-    
     # Example usage
     input_folder = "input"  # Folder containing input images
     output_folder = "sorted_images"  # Folder to save sorted images
